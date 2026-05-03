@@ -39,8 +39,9 @@ export default function Dashboard() {
   const [progress, setProgress] = useState<ProcessingProgress | null>(null)
   const [followSearch, setFollowSearch] = useState('')
   const [followMsg, setFollowMsg] = useState('')
+  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => { init() }, [])
+  useEffect(() => { setMounted(true); init() }, [])
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -158,7 +159,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {isFolderPickerSupported() ? (
+              {mounted && isFolderPickerSupported() ? (
                 <Button id="btn-pick-folder" variant="primary" size="sm" onClick={handlePickFolder}>
                   📂 Selecionar Pasta
                 </Button>

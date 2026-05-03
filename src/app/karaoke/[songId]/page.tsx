@@ -358,7 +358,8 @@ export default function KaraokePage() {
       const { frequency, confidence } = detectPitch(buffer, 44100)
       const time = audioRef.current?.currentTime ?? 0
 
-      if (confidence > 0.5 && frequency > 0) {
+      // Only score when audio is playing AND reference pitch data exists
+      if (confidence > 0.5 && frequency > 0 && audioRef.current && !audioRef.current.paused && referencePitch.length > 0) {
         userPitchHistory.current.push({ time, frequency })
         if (userPitchHistory.current.length > 10000) userPitchHistory.current.shift()
 

@@ -40,9 +40,11 @@ export async function processAudioFile(
     const { pipeline, env } = await import('@huggingface/transformers')
     env.allowLocalModels = false
     env.useBrowserCache = true
-    const transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-small', {
-      dtype: tier === 'webgpu' ? 'fp16' : 'fp32',
-    })
+    const transcriber = await pipeline(
+      'automatic-speech-recognition',
+      'Xenova/whisper-tiny',
+      { dtype: tier === 'webgpu' ? 'fp16' : 'fp32' }
+    )
     onProgress({ stage: 'transcribing', progress: 68, message: 'Transcrevendo letra...' })
     const result: any = await transcriber(mixToMono(audioBuffer), {
       return_timestamps: 'word',
