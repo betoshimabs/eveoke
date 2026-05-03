@@ -63,64 +63,63 @@ function PitchHighway({
     ctx.clearRect(0, 0, W, H)
 
     // Background grid
-    ctx.strokeStyle = 'rgba(155,93,229,0.15)'
+    ctx.strokeStyle = 'rgba(155,93,229,0.12)'
     ctx.lineWidth = 1
-    for (let y = 0; y < H; y += H / 8) {
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(W, y)
-      ctx.stroke()
-    }
-    for (let x = 0; x < W; x += W / 16) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, H)
-      ctx.stroke()
-    }
+    for (let y = 0; y < H; y += H / 8) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke() }
+    for (let x = 0; x < W; x += W / 16) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke() }
 
-    // Pitch normalization helpers
-    const minFreq = 80, maxFreq = 1000
-    const freqToY = (f: number) => f <= 0 ? -10 : H - ((f - minFreq) / (maxFreq - minFreq)) * H
-
-    const windowSec = 6 // show 6 seconds window
+    const minFreq = 100, maxFreq = 900
+    const freqToY = (f: number) => f <= 0 ? -10 : H - ((Math.log2(f) - Math.log2(minFreq)) / (Math.log2(maxFreq) - Math.log2(minFreq))) * H
+    const windowSec = 6
     const timeToX = (t: number) => ((t - (currentTime - windowSec * 0.4)) / windowSec) * W
 
-    // Draw reference pitch line
     const refWindow = referencePitch.filter(
       (f) => f.time >= currentTime - windowSec * 0.4 && f.time <= currentTime + windowSec * 0.6
     )
-    if (refWindow.length > 1) {
-      ctx.strokeStyle = '#00F5FF'
-      ctx.lineWidth = 3
-      ctx.shadowColor = '#00F5FF'
-      ctx.shadowBlur = 6
-      ctx.beginPath()
-      let started = false
-      for (const frame of refWindow) {
-        if (frame.frequency <= 0) { started = false; continue }
-        const x = timeToX(frame.time)
-        const y = freqToY(frame.frequency)
-        if (!started) { ctx.moveTo(x, y); started = true } else ctx.lineTo(x, y)
+
+    // Draw reference as segments — dashed line bridges gaps in detection
+    if (refWindow.length > 0) {
+      const validFrames = refWindow.filter(f => f.frequency > 0)
+      if (validFrames.length > 1) {
+        // Draw glow band behind
+        ctx.strokeStyle = 'rgba(0,245,255,0.15)'
+        ctx.lineWidth = 10
+        ctx.beginPath()
+        let started = false
+        for (const frame of validFrames) {
+          const x = timeToX(frame.time), y = freqToY(frame.frequency)
+          if (!started) { ctx.moveTo(x, y); started = true } else ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+        // Draw main line
+        ctx.strokeStyle = '#00F5FF'
+        ctx.lineWidth = 2.5
+        ctx.shadowColor = '#00F5FF'
+        ctx.shadowBlur = 5
+        ctx.beginPath()
+        started = false
+        for (const frame of validFrames) {
+          const x = timeToX(frame.time), y = freqToY(frame.frequency)
+          if (!started) { ctx.moveTo(x, y); started = true } else ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+        ctx.shadowBlur = 0
       }
-      ctx.stroke()
-      ctx.shadowBlur = 0
     }
 
-    // Draw user pitch line
+    // Draw user pitch
     const userWindow = userPitch.filter(
-      (f) => f.time >= currentTime - windowSec * 0.4 && f.time <= currentTime + 0.1
+      (f) => f.time >= currentTime - windowSec * 0.4 && f.time <= currentTime + 0.1 && f.frequency > 0
     )
     if (userWindow.length > 1) {
       ctx.strokeStyle = '#39FF14'
       ctx.lineWidth = 3
       ctx.shadowColor = '#39FF14'
-      ctx.shadowBlur = 8
+      ctx.shadowBlur = 10
       ctx.beginPath()
       let started = false
       for (const frame of userWindow) {
-        if (frame.frequency <= 0) { started = false; continue }
-        const x = timeToX(frame.time)
-        const y = freqToY(frame.frequency)
+        const x = timeToX(frame.time), y = freqToY(frame.frequency)
         if (!started) { ctx.moveTo(x, y); started = true } else ctx.lineTo(x, y)
       }
       ctx.stroke()
@@ -129,25 +128,24 @@ function PitchHighway({
 
     // Playhead
     const playX = timeToX(currentTime)
-    ctx.strokeStyle = 'rgba(255,230,0,0.7)'
+    ctx.strokeStyle = 'rgba(255,230,0,0.8)'
     ctx.lineWidth = 2
     ctx.setLineDash([4, 4])
-    ctx.beginPath()
-    ctx.moveTo(playX, 0)
-    ctx.lineTo(playX, H)
-    ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(playX, 0); ctx.lineTo(playX, H); ctx.stroke()
     ctx.setLineDash([])
+
+    // No data warning
+    if (refWindow.filter(f => f.frequency > 0).length === 0 && referencePitch.length > 0) {
+      ctx.fillStyle = 'rgba(155,93,229,0.4)'
+      ctx.font = '9px monospace'
+      ctx.fillText('♪ seção instrumental', W / 2 - 50, H / 2)
+    }
 
   }, [referencePitch, userPitch, currentTime])
 
   return (
     <div className="pitch-highway-container" style={{ height: 180 }}>
-      <canvas
-        ref={canvasRef}
-        width={800}
-        height={180}
-        style={{ width: '100%', height: '100%' }}
-      />
+      <canvas ref={canvasRef} width={800} height={180} style={{ width: '100%', height: '100%' }} />
     </div>
   )
 }

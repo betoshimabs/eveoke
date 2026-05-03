@@ -48,8 +48,10 @@ export async function processAudioFile(
     onProgress({ stage: 'transcribing', progress: 68, message: 'Transcrevendo letra...' })
     const result: any = await transcriber(mixToMono(audioBuffer), {
       return_timestamps: 'word',
-      language: undefined,
       task: 'transcribe',
+      language: 'portuguese',
+      chunk_length_s: 30,    // process full audio in 30s chunks
+      stride_length_s: 5,    // 5s overlap between chunks for continuity
     })
     lyricsLines = groupTokensIntoLines(result.chunks ?? [])
     onProgress({ stage: 'transcribing', progress: 84, message: 'Letra extraída!' })
@@ -180,16 +182,56 @@ function groupTokensIntoLines(chunks: any[]): LyricsLine[] {
 }
 
 function extractReferencePitch(ab: AudioBuffer): PitchFrame[] {
-  const mono = mixToMono(ab)
   const sr = ab.sampleRate
   const frameSize = 2048
-  // Adaptive hop: always cover the full song with ~5000 evenly-spaced frames
   const maxFrames = 5000
-  const hopSize = Math.max(512, Math.floor(mono.length / maxFrames))
+  const hopSize = Math.max(512, Math.floor(ab.length / maxFrames))
   const frames: PitchFrame[] = []
-  for (let i = 0; i + frameSize < mono.length; i += hopSize) {
-    const { frequency, confidence } = detectPitch(mono.slice(i, i + frameSize), sr)
+
+  // Mix to mono and apply bandpass (150-800Hz) to isolate vocal melody range
+  // This dramatically improves YIN accuracy on polyphonic tracks
+  const mono = mixToMono(ab)
+  const filtered = applyVocalBandpass(mono, sr)
+
+  for (let i = 0; i + frameSize < filtered.length; i += hopSize) {
+    const { frequency, confidence } = detectPitch(filtered.slice(i, i + frameSize), sr)
     frames.push({ time: i / sr, frequency, confidence })
   }
-  return frames
+
+  // Smooth pitch curve with 5-frame moving average
+  return smoothPitch(frames)
+}
+
+function applyVocalBandpass(samples: Float32Array, sr: number): Float32Array {
+  // Simple IIR bandpass approximation targeting 150-800Hz vocal range
+  // Two-pass (highpass at 150Hz then lowpass at 800Hz)
+  const out = new Float32Array(samples.length)
+  const rc_high = 1 / (2 * Math.PI * 150)
+  const dt = 1 / sr
+  const alpha_high = rc_high / (rc_high + dt)
+  let prev = 0, prev_in = 0
+  for (let i = 0; i < samples.length; i++) {
+    out[i] = alpha_high * (prev + samples[i] - prev_in)
+    prev = out[i]; prev_in = samples[i]
+  }
+  // Lowpass at 800Hz
+  const rc_low = 1 / (2 * Math.PI * 800)
+  const alpha_low = dt / (rc_low + dt)
+  let lp = 0
+  for (let i = 0; i < out.length; i++) {
+    lp = lp + alpha_low * (out[i] - lp)
+    out[i] = lp
+  }
+  return out
+}
+
+function smoothPitch(frames: PitchFrame[]): PitchFrame[] {
+  const win = 5
+  return frames.map((f, i) => {
+    if (f.frequency <= 0) return f
+    const window = frames.slice(Math.max(0, i - win), i + win + 1).filter(x => x.frequency > 0)
+    if (window.length === 0) return f
+    const avg = window.reduce((s, x) => s + x.frequency, 0) / window.length
+    return { ...f, frequency: avg }
+  })
 }
