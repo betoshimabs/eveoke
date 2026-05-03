@@ -87,11 +87,12 @@ interface ButtonProps {
   type?: 'button' | 'submit'
   className?: string
   id?: string
+  style?: React.CSSProperties
 }
 
 export function Button({
   children, onClick, variant = 'primary', size = 'md',
-  disabled, type = 'button', className = '', id
+  disabled, type = 'button', className = '', id, style
 }: ButtonProps) {
   const sizeClass = size === 'sm' ? 'btn-sm' : size === 'lg' ? 'btn-lg' : ''
   return (
@@ -100,6 +101,7 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
+      style={style}
       className={`btn btn-${variant} ${sizeClass} ${className}`}
     >
       {children}
