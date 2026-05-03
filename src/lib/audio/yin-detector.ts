@@ -102,7 +102,7 @@ export function pitchAccuracy(
   refFreq: number,
   toleranceSemitones: number = 1.5
 ): number {
-  if (refFreq <= 0) return 1 // No reference — don't penalize
+  if (refFreq <= 0) return 0 // No reference pitch at this moment — no points awarded
   if (userFreq <= 0) return 0 // No audio captured
 
   const diff = semitoneDiff(userFreq, refFreq)

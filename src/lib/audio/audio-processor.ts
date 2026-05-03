@@ -43,7 +43,7 @@ export async function processAudioFile(
     const transcriber = await pipeline(
       'automatic-speech-recognition',
       'Xenova/whisper-tiny',
-      { dtype: tier === 'webgpu' ? 'fp16' : 'fp32' }
+      { dtype: 'fp32' } // always fp32 — fp16 causes ONNX node errors
     )
     onProgress({ stage: 'transcribing', progress: 68, message: 'Transcrevendo letra...' })
     const result: any = await transcriber(mixToMono(audioBuffer), {
@@ -88,7 +88,7 @@ export async function processAudioFile(
     duration_seconds: Math.round(audioBuffer.duration),
     stems_storage_path: stemErr ? null : stemPath,
     lyrics_json: lyricsLines,
-    reference_pitch_json: referencePitch.slice(0, 5000),
+    reference_pitch_json: referencePitch, // adaptive hop \u2014 covers full song
     original_filename: file.name,
     file_size_bytes: file.size,
     processing_tier: tier,
@@ -180,9 +180,15 @@ function groupTokensIntoLines(chunks: any[]): LyricsLine[] {
 }
 
 function extractReferencePitch(ab: AudioBuffer): PitchFrame[] {
-  const mono = mixToMono(ab); const sr = ab.sampleRate; const fs = 2048; const hs = 512; const frames: PitchFrame[] = []
-  for (let i = 0; i + fs < mono.length; i += hs) {
-    const { frequency, confidence } = detectPitch(mono.slice(i, i + fs), sr)
+  const mono = mixToMono(ab)
+  const sr = ab.sampleRate
+  const frameSize = 2048
+  // Adaptive hop: always cover the full song with ~5000 evenly-spaced frames
+  const maxFrames = 5000
+  const hopSize = Math.max(512, Math.floor(mono.length / maxFrames))
+  const frames: PitchFrame[] = []
+  for (let i = 0; i + frameSize < mono.length; i += hopSize) {
+    const { frequency, confidence } = detectPitch(mono.slice(i, i + frameSize), sr)
     frames.push({ time: i / sr, frequency, confidence })
   }
   return frames

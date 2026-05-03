@@ -266,6 +266,7 @@ export default function KaraokePage() {
   const userPitchHistory = useRef<Array<{ time: number; frequency: number }>>([])
   const pitchScores = useRef<number[]>([])
   const timingScores = useRef<number[]>([])
+  const lastScoredAt = useRef<number>(0)
 
   // Result
   const [sessionScore, setSessionScore] = useState<SessionScore | null>(null)
@@ -358,6 +359,11 @@ export default function KaraokePage() {
       const { frequency, confidence } = detectPitch(buffer, 44100)
       const time = audioRef.current?.currentTime ?? 0
 
+      // Rate-limit scoring to once per 200ms (prevents 60fps inflation)
+      const now = performance.now()
+      if (now - lastScoredAt.current < 200) return
+      lastScoredAt.current = now
+
       // Only score when audio is playing AND reference pitch data exists
       if (confidence > 0.5 && frequency > 0 && audioRef.current && !audioRef.current.paused && referencePitch.length > 0) {
         userPitchHistory.current.push({ time, frequency })
@@ -375,7 +381,9 @@ export default function KaraokePage() {
         setCombo(newCombo)
         setMaxCombo((prev) => Math.max(prev, newCombo))
 
-        const pts = Math.round(pitchScore * 100 * comboMultiplier(newCombo))
+        // Base pts: 8 per evaluation at perfect pitch, max 32 with combo
+        // At 5 evals/sec perfect: 32*5=160 pts/sec → ~10k in ~60s of perfect singing
+        const pts = Math.round(pitchScore * 8 * comboMultiplier(newCombo))
         setScore((prev) => Math.min(10000, prev + pts))
       }
     }
